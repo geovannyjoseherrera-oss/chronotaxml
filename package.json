@@ -1,0 +1,29 @@
+{
+  "name": "chronotaxml",
+  "productName": "ChronoTaXML",
+  "version": "1.0.1",
+  "description": "Gestor y descargador masivo de comprobantes electrónicos XML del SRI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "dependencies": {
+    "adm-zip": "^0.5.10"
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.chronotaxml.app",
+    "productName": "ChronoTaXML",
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

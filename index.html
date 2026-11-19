@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ChronoTaXML - Gestor y Descarga Masiva XML SRI</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 font-sans antialiased">
+  <div class="max-w-7xl mx-auto px-5 py-6">
+    <!-- Header -->
+    <header class="flex flex-wrap items-center justify-between gap-4 pb-6 border-b border-slate-800">
+      <div>
+        <div class="flex items-center gap-2">
+          <span class="px-2.5 py-0.5 text-xs font-bold uppercase tracking-wider rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+            SRI Ecuador · Comprobantes Electrónicos
+          </span>
+          <span class="text-xs text-slate-400">v1.0.1 Comercial</span>
+        </div>
+        <h1 class="text-2xl md:text-3xl font-extrabold text-white mt-1 tracking-tight">
+          ChronoTa<span class="text-cyan-400">XML</span>
+        </h1>
+        <p class="text-sm text-slate-400 mt-0.5">
+          Descarga masiva de archivos XML autorizados del SRI para documentos <strong class="text-slate-200">Recibidos</strong> y <strong class="text-slate-200">Emitidos (Enviados)</strong>.
+        </p>
+      </div>
+      <div class="flex flex-wrap items-center gap-3">
+        <button id="btn-portal-sri" type="button" class="px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 text-sm font-semibold rounded-xl transition flex items-center gap-2 cursor-pointer">
+          🌐 Abrir Portal SRI en Línea
+        </button>
+        <button id="btn-carpeta" type="button" class="px-4 py-2.5 bg-cyan-500 hover:bg-cyan-400 text-slate-950 text-sm font-bold rounded-xl shadow-lg shadow-cyan-500/20 transition cursor-pointer">
+          📁 Carpeta Destino
+        </button>
+      </div>
+    </header>
+
+    <!-- Estado de Carpeta y KPIs -->
+    <section class="grid grid-cols-1 md:grid-cols-4 gap-4 my-6">
+      <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
+        <p class="text-xs uppercase font-semibold text-slate-400">Carpeta de Descarga</p>
+        <p id="ruta-carpeta" class="text-xs text-cyan-400 font-mono mt-1.5 truncate" title="No seleccionada">No seleccionada aún</p>
+        <button id="btn-cambiar-carpeta" type="button" class="mt-2 text-xs text-slate-300 underline hover:text-white cursor-pointer">Cambiar ubicación</button>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
+        <p class="text-xs uppercase font-semibold text-slate-400">Claves Cargadas</p>
+        <p id="kpi-total" class="text-2xl font-bold text-white mt-1">0</p>
+        <p id="kpi-tipo-label" class="text-xs text-slate-400 mt-1">Bandeja: Documentos Recibidos</p>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
+        <p class="text-xs uppercase font-semibold text-slate-400">XML Descargados</p>
+        <p id="kpi-ok" class="text-2xl font-bold text-emerald-400 mt-1">0</p>
+        <p class="text-xs text-slate-400 mt-1">Validados desde Web Service SRI</p>
+      </div>
+      <div class="bg-slate-900/90 border border-slate-800 p-4 rounded-2xl">
+        <p class="text-xs uppercase font-semibold text-slate-400">Progreso del Lote</p>
+        <p id="kpi-pct" class="text-2xl font-bold text-cyan-400 mt-1">0%</p>
+        <div class="w-full bg-slate-800 h-2 rounded-full mt-2 overflow-hidden">
+          <div id="barra-progreso" class="bg-cyan-400 h-full transition-all duration-200" style="width: 0%"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Selector de Bandeja y Métodos de Carga -->
+    <section class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl flex flex-col justify-between">
+        <div>
+          <span class="text-xs font-bold text-cyan-400 uppercase">Paso 1 · Clasificación</span>
+          <h2 class="text-lg font-bold text-white mt-1">Tipo de Documentos</h2>
+          <p class="text-xs text-slate-400 mt-1">Elige si vas a procesar comprobantes recibidos de proveedores o emitidos (enviados) a clientes.</p>
+
+          <div class="grid grid-cols-2 gap-3 mt-4">
+            <button id="btn-recibidos" type="button" class="py-3 px-3 rounded-xl border-2 border-cyan-500 bg-cyan-500/10 text-cyan-300 font-bold text-sm transition cursor-pointer">
+              📥 Recibidos
+            </button>
+            <button id="btn-emitidos" type="button" class="py-3 px-3 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-semibold text-sm hover:border-slate-500 transition cursor-pointer">
+              📤 Emitidos
+            </button>
+          </div>
+        </div>
+
+        <div class="mt-5 pt-4 border-t border-slate-800 flex items-center justify-between">
+          <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+            <input id="chk-zip" type="checkbox" checked class="rounded border-slate-600 bg-slate-800 text-cyan-500" />
+            Empaquetar también en archivo .ZIP
+          </label>
+        </div>
+      </div>
+
+      <div class="bg-slate-900 border border-slate-800 p-5 rounded-2xl lg:col-span-2">
+        <span class="text-xs font-bold text-cyan-400 uppercase">Paso 2 · Origen de Comprobantes</span>
+        <h2 class="text-lg font-bold text-white mt-1">Importar Reporte del SRI (.txt / .csv / .xlsx) o Claves de Acceso</h2>
+        <p class="text-xs text-slate-400 mt-1">
+          Sube el reporte descargado desde <em>SRI en Línea &gt; Facturación Electrónica &gt; Comprobantes Electrónicos Recibidos / Emitidos</em>, o pega directamente las claves de acceso de 49 dígitos.
+        </p>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+          <div class="border border-dashed border-slate-700 rounded-xl p-4 bg-slate-950/50">
+            <label class="block text-xs font-semibold text-slate-300 mb-2">Cargar archivo del SRI (.txt, .xls, .xlsx, .csv)</label>
+            <input id="input-reporte" type="file" accept=".txt,.csv,.xls,.xlsx" class="block w-full text-xs text-slate-400 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-cyan-500/20 file:text-cyan-300 hover:file:bg-cyan-500/30 cursor-pointer" />
+            <p class="text-[11px] text-slate-500 mt-2">Detecta automáticamente todas las claves de acceso de 49 dígitos en el archivo.</p>
+          </div>
+
+          <div class="border border-slate-800 rounded-xl p-3 bg-slate-950/50">
+            <label class="block text-xs font-semibold text-slate-300 mb-1">O pega claves de acceso (una por línea)</label>
+            <textarea id="txt-claves" rows="3" placeholder="1911202601179001691900120010010000123451234567813" class="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-mono text-slate-200 focus:outline-none focus:border-cyan-500"></textarea>
+            <button id="btn-agregar-claves" type="button" class="mt-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-xs font-semibold text-cyan-300 rounded-lg transition cursor-pointer">
+              + Agregar claves a la cola
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Acción Principal y Tabla de Resultados -->
+    <section class="bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden">
+      <div class="p-4 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3">
+        <div class="flex items-center gap-3">
+          <h3 class="font-bold text-sm text-white">Cola de Descarga de Comprobantes XML</h3>
+          <button id="btn-limpiar" type="button" class="text-xs text-slate-400 hover:text-rose-400 cursor-pointer">Limpiar lista</button>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btn-exportar" type="button" class="px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold rounded-xl border border-slate-700 transition cursor-pointer">
+            📊 Exportar Reporte Excel
+          </button>
+          <button id="btn-descargar" type="button" class="px-5 py-2 bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-extrabold rounded-xl shadow-lg shadow-emerald-500/20 transition cursor-pointer">
+            ⬇️ Iniciar Descarga Masiva de XML
+          </button>
+        </div>
+      </div>
+
+      <div class="overflow-x-auto max-h-[420px]">
+        <table class="w-full text-left border-collapse text-xs">
+          <thead class="bg-slate-950 text-slate-400 uppercase sticky top-0">
+            <tr>
+              <th class="p-3 w-12">#</th>
+              <th class="p-3">Clave de Acceso (49 dígitos)</th>
+              <th class="p-3">Tipo Doc.</th>
+              <th class="p-3">Fecha Emisión</th>
+              <th class="p-3">RUC Emisor</th>
+              <th class="p-3 text-center">Estado</th>
+              <th class="p-3">Detalle / Archivo</th>
+            </tr>
+          </thead>
+          <tbody id="tbody-claves" class="divide-y divide-slate-800/80">
+            <tr>
+              <td colspan="7" class="p-8 text-center text-slate-500">
+                Carga un reporte del SRI o pega claves de acceso para comenzar la descarga masiva de XML.
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </div>
+
+  <!-- PANTALLA DE ACTIVACIÓN DE LICENCIA - CHRONOTAXML -->
+  <div id="pantalla-licencia" style="position:fixed;inset:0;background:rgba(2,6,23,0.96);backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;font-family:system-ui,-apple-system,sans-serif;">
+    <div style="background:#0f172a;border:1px solid #1e293b;width:100%;max-width:440px;border-radius:18px;padding:32px;box-shadow:0 25px 50px -12px rgba(0,0,0,0.7);text-align:center;color:#f8fafc;">
+      <div style="width:56px;height:56px;background:rgba(6,182,212,0.15);color:#22d3ee;border:1px solid rgba(6,182,212,0.3);border-radius:14px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;font-size:26px;">🔐</div>
+      <h2 style="margin:0 0 8px;color:#ffffff;font-size:22px;font-weight:800;">Activar ChronoTaXML</h2>
+      <p style="margin:0 0 24px;color:#94a3b8;font-size:14px;line-height:1.5;">Ingresa el nombre o razón social del titular y tu clave de licencia comercial.</p>
+      
+      <div style="text-align:left;margin-bottom:14px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#cbd5e1;margin-bottom:6px;">Titular o Empresa Registrada</label>
+        <input id="lic-cliente" type="text" placeholder="Ej: Estudio Contable Andino" style="width:100%;box-sizing:border-box;padding:11px 14px;border:1px solid #334155;background:#020617;color:#fff;border-radius:10px;font-size:14px;outline:none;">
+      </div>
+
+      <div style="text-align:left;margin-bottom:20px;">
+        <label style="display:block;font-size:12px;font-weight:600;color:#cbd5e1;margin-bottom:6px;">Clave de Licencia</label>
+        <input id="lic-clave" type="text" placeholder="CTXML-XXXX-XXXX-XXXX" style="width:100%;box-sizing:border-box;padding:11px 14px;border:1px solid #334155;background:#020617;color:#22d3ee;border-radius:10px;font-size:14px;font-family:monospace;text-transform:uppercase;outline:none;">
+      </div>
+
+      <div id="lic-error" style="display:none;background:rgba(220,38,38,0.15);color:#fca5a5;font-size:13px;padding:10px;border-radius:10px;margin-bottom:16px;border:1px solid rgba(220,38,38,0.3);">
+        La clave ingresada no coincide con el titular. Verifica los datos.
+      </div>
+
+      <button id="btn-activar-licencia" type="button" style="width:100%;background:#06b6d4;color:#083344;border:none;padding:13px;border-radius:10px;font-size:15px;font-weight:800;cursor:pointer;">
+        Activar ChronoTaXML
+      </button>
+      <p style="margin:16px 0 0;font-size:12px;color:#64748b;">Licencia comercial autorizada · ChronoTaXML v1.0.1</p>
+    </div>
+  </div>
+
+  <script>
+    const appState = {
+      tipo: 'recibidos',
+      carpeta: '',
+      cola: []
+    };
+
+    const TIPOS_COMPROBANTE = {
+      '01': 'Factura',
+      '03': 'Liq. Compra',
+      '04': 'Nota Crédito',
+      '05': 'Nota Débito',
+      '06': 'Guía Remisión',
+      '07': 'Retención'
+    };
+
+    function decodificarClave(clave) {
+      if (!/^\d{49}$/.test(clave)) return null;
+      const fecha = `${clave.slice(0,2)}/${clave.slice(2,4)}/${clave.slice(4,8)}`;
+      const codDoc = clave.slice(8,10);
+      const ruc = clave.slice(10,23);
+      return {
+        claveAcceso: clave,
+        fechaEmision: fecha,
+        tipoDoc: TIPOS_COMPROBANTE[codDoc] || `Doc (${codDoc})`,
+        rucEmisor: ruc,
+        estado: 'Pendiente',
+        detalle: 'Listo para descargar'
+      };
+    }
+
+    function setTipo(nuevoTipo) {
+      appState.tipo = nuevoTipo;
+      const btnRec = document.getElementById('btn-recibidos');
+      const btnEmi = document.getElementById('btn-emitidos');
+      if (nuevoTipo === 'recibidos') {
+        btnRec.className = 'py-3 px-3 rounded-xl border-2 border-cyan-500 bg-cyan-500/10 text-cyan-300 font-bold text-sm transition cursor-pointer';
+        btnEmi.className = 'py-3 px-3 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-semibold text-sm hover:border-slate-500 transition cursor-pointer';
+        document.getElementById('kpi-tipo-label').textContent = 'Bandeja: Documentos Recibidos';
+      } else {
+        btnEmi.className = 'py-3 px-3 rounded-xl border-2 border-cyan-500 bg-cyan-500/10 text-cyan-300 font-bold text-sm transition cursor-pointer';
+        btnRec.className = 'py-3 px-3 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-semibold text-sm hover:border-slate-500 transition cursor-pointer';
+        document.getElementById('kpi-tipo-label').textContent = 'Bandeja: Documentos Emitidos';
+      }
+    }
+
+    function agregarClavesUnicas(listaClaves) {
+      const existentes = new Set(appState.cola.map(i => i.claveAcceso));
+      let agregadas = 0;
+      listaClaves.forEach(c => {
+        const clean = String(c).trim();
+        if (/^\d{49}$/.test(clean) && !existentes.has(clean)) {
+          const info = decodificarClave(clean);
+          if (info) {
+            appState.cola.push(info);
+            existentes.add(clean);
+            agregadas++;
+          }
+        }
+      });
+      renderTabla();
+      return agregadas;
+    }
+
+    function extraerDeTexto() {
+      const raw = document.getElementById('txt-claves').value;
+      const matches = raw.match(/\d{49}/g) || [];
+      if (!matches.length) {
+        alert('No se encontraron claves de acceso válidas de 49 dígitos.');
+        return;
+      }
+      agregarClavesUnicas(matches);
+      document.getElementById('txt-claves').value = '';
+    }
+
+    function limpiarCola() {
+      appState.cola = [];
+      document.getElementById('kpi-ok').textContent = '0';
+      document.getElementById('kpi-pct').textContent = '0%';
+      document.getElementById('barra-progreso').style.width = '0%';
+      renderTabla();
+    }
+
+    function renderTabla() {
+      document.getElementById('kpi-total').textContent = appState.cola.length;
+      const tbody = document.getElementById('tbody-claves');
+      if (!appState.cola.length) {
+        tbody.innerHTML = `<tr><td colspan="7" class="p-8 text-center text-slate-500">Carga un reporte del SRI o pega claves de acceso para comenzar la descarga masiva de XML.</td></tr>`;
+        return;
+      }
+      tbody.innerHTML = appState.cola.map((item, idx) => {
+        let badge = `<span class="px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">Pendiente</span>`;
+        if (item.estado === 'Descargado') {
+          badge = `<span class="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 font-semibold">Descargado</span>`;
+        } else if (item.estado === 'No descargado' || item.estado === 'Error') {
+          badge = `<span class="px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-400 font-semibold">${item.estado}</span>`;
+        }
+        return `
+          <tr class="hover:bg-slate-800/40">
+            <td class="p-3 text-slate-500">${idx + 1}</td>
+            <td class="p-3 font-mono text-cyan-300">${item.claveAcceso}</td>
+            <td class="p-3 text-slate-200 font-medium">${item.tipoDoc}</td>
+            <td class="p-3 text-slate-300">${item.fechaEmision}</td>
+            <td class="p-3 font-mono text-slate-300">${item.rucEmisor}</td>
+            <td class="p-3 text-center">${badge}</td>
+            <td class="p-3 text-slate-400 truncate max-w-[220px]">${item.detalle}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    async function elegirCarpeta() {
+      if (!window.chronotaxmlAPI || !window.chronotaxmlAPI.seleccionarCarpeta) {
+        alert('Esta función requiere ejecutar ChronoTaXML como aplicación de escritorio (.exe).');
+        return;
+      }
+      const dir = await window.chronotaxmlAPI.seleccionarCarpeta();
+      if (dir) {
+        appState.carpeta = dir;
+        const el = document.getElementById('ruta-carpeta');
+        el.textContent = dir;
+        el.title = dir;
+      }
+    }
+
+    async function abrirPortalSRI() {
+      if (window.chronotaxmlAPI && window.chronotaxmlAPI.abrirPortalSRI) {
+        await window.chronotaxmlAPI.abrirPortalSRI();
+      } else {
+        window.open('https://srienlinea.sri.gob.ec/sri-en-linea/inicio/NAT', '_blank');
+      }
+    }
+
+    async function iniciarDescargaMasiva() {
+      if (!appState.cola.length) {
+        alert('Primero carga un reporte del SRI o pega claves de acceso de 49 dígitos.');
+        return;
+      }
+      if (!appState.carpeta) {
+        await elegirCarpeta();
+        if (!appState.carpeta) return;
+      }
+      if (!window.chronotaxmlAPI || !window.chronotaxmlAPI.descargarLoteClaves) {
+        alert('Ejecuta el instalador de escritorio ChronoTaXML para guardar archivos XML en tu PC.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-descargar');
+      btn.disabled = true;
+      btn.textContent = '⏳ Descargando desde SRI...';
+
+      try {
+        const crearZip = document.getElementById('chk-zip').checked;
+        const resp = await window.chronotaxmlAPI.descargarLoteClaves({
+          items: appState.cola,
+          carpetaDestino: appState.carpeta,
+          tipoDocumento: appState.tipo,
+          crearZip
+        });
+
+        if (resp && resp.ok) {
+          let okCount = 0;
+          resp.resultados.forEach(r => {
+            const item = appState.cola.find(c => c.claveAcceso === r.clave);
+            if (item) {
+              item.estado = r.estado;
+              item.detalle = r.archivo || r.detalle || '';
+              if (r.estado === 'Descargado') okCount++;
+            }
+          });
+          document.getElementById('kpi-ok').textContent = okCount;
+          renderTabla();
+          alert(`Proceso finalizado.\nXML descargados: ${okCount} de ${appState.cola.length}\nCarpeta: ${resp.subcarpeta}`);
+        } else {
+          alert('No se pudo completar la descarga: ' + (resp && resp.error ? resp.error : 'Error desconocido'));
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = '⬇️ Iniciar Descarga Masiva de XML';
+      }
+    }
+
+    function exportarResumenExcel() {
+      if (!appState.cola.length) {
+        alert('No hay datos en la cola para exportar.');
+        return;
+      }
+      const rows = appState.cola.map((i, idx) => ({
+        No: idx + 1,
+        Bandeja: appState.tipo.toUpperCase(),
+        Clave_Acceso: i.claveAcceso,
+        Tipo_Comprobante: i.tipoDoc,
+        Fecha_Emision: i.fechaEmision,
+        RUC_Emisor: i.rucEmisor,
+        Estado_Descarga: i.estado,
+        Archivo_o_Detalle: i.detalle
+      }));
+      const wb = XLSX.utils.book_new();
+      const ws = XLSX.utils.json_to_sheet(rows);
+      XLSX.utils.book_append_sheet(wb, ws, 'Comprobantes_SRI');
+      XLSX.writeFile(wb, `ChronoTaXML_Reporte_${appState.tipo}.xlsx`);
+    }
+
+    // Licencia
+    (function() {
+      const SECRETO_MAESTRO = "CHRONOTAXML_SRI_2026_PRIVADO_#7741";
+
+      function calcularFirma(nombre) {
+        const limpio = String(nombre || '').trim().toUpperCase().replace(/\s+/g, ' ');
+        if (!limpio) return "";
+        const base = limpio + "|" + SECRETO_MAESTRO;
+        let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+        for (let i = 0; i < base.length; i++) {
+          const ch = base.charCodeAt(i);
+          h1 = Math.imul(h1 ^ ch, 2654435761);
+          h2 = Math.imul(h2 ^ ch, 1597334677);
+        }
+        h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+        h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+        const p1 = (h1 >>> 0).toString(16).toUpperCase().padStart(8, '0');
+        const p2 = (h2 >>> 0).toString(16).toUpperCase().padStart(8, '0');
+        return `CTXML-${p1.slice(0,4)}-${p1.slice(4,8)}-${p2.slice(0,4)}`;
+      }
+
+      function activarChronoTaXML() {
+        const cliente = document.getElementById('lic-cliente').value.trim();
+        const clave = document.getElementById('lic-clave').value.trim().toUpperCase();
+        const esperada = calcularFirma(cliente);
+
+        if (cliente.length >= 3 && clave === esperada) {
+          localStorage.setItem('ctxml_lic_cliente', cliente);
+          localStorage.setItem('ctxml_lic_clave', clave);
+          document.getElementById('pantalla-licencia').style.display = 'none';
+        } else {
+          document.getElementById('lic-error').style.display = 'block';
+        }
+      }
+
+      document.addEventListener('DOMContentLoaded', () => {
+        const cGuardado = localStorage.getItem('ctxml_lic_cliente') || '';
+        const kGuardada = localStorage.getItem('ctxml_lic_clave') || '';
+        if (cGuardado && kGuardada === calcularFirma(cGuardado)) {
+          document.getElementById('pantalla-licencia').style.display = 'none';
+        }
+
+        document.getElementById('btn-activar-licencia').addEventListener('click', activarChronoTaXML);
+        document.getElementById('btn-portal-sri').addEventListener('click', abrirPortalSRI);
+        document.getElementById('btn-carpeta').addEventListener('click', elegirCarpeta);
+        document.getElementById('btn-cambiar-carpeta').addEventListener('click', elegirCarpeta);
+        document.getElementById('btn-recibidos').addEventListener('click', () => setTipo('recibidos'));
+        document.getElementById('btn-emitidos').addEventListener('click', () => setTipo('emitidos'));
+        document.getElementById('btn-agregar-claves').addEventListener('click', extraerDeTexto);
+        document.getElementById('btn-limpiar').addEventListener('click', limpiarCola);
+        document.getElementById('btn-exportar').addEventListener('click', exportarResumenExcel);
+        document.getElementById('btn-descargar').addEventListener('click', iniciarDescargaMasiva);
+
+        document.getElementById('input-reporte').addEventListener('change', (e) => {
+          const file = e.target.files[0];
+          if (!file) return;
+          const reader = new FileReader();
+          reader.onload = (evt) => {
+            let textoCompleto = '';
+            if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+              const data = new Uint8Array(evt.target.result);
+              const wb = XLSX.read(data, { type: 'array' });
+              wb.SheetNames.forEach(name => {
+                textoCompleto += '\n' + XLSX.utils.sheet_to_csv(wb.Sheets[name]);
+              });
+            } else {
+              textoCompleto = evt.target.result;
+            }
+            const matches = textoCompleto.match(/\d{49}/g) || [];
+            if (!matches.length) {
+              alert('No se detectaron claves de acceso de 49 dígitos en el archivo.');
+              return;
+            }
+            agregarClavesUnicas(matches);
+          };
+          if (file.name.endsWith('.xls') || file.name.endsWith('.xlsx')) {
+            reader.readAsArrayBuffer(file);
+          } else {
+            reader.readAsText(file, 'UTF-8');
+          }
+        });
+
+        if (window.chronotaxmlAPI && window.chronotaxmlAPI.onProgresoDescarga) {
+          window.chronotaxmlAPI.onProgresoDescarga(({ actual, total }) => {
+            const pct = Math.round((actual / total) * 100);
+            document.getElementById('kpi-pct').textContent = `${pct}%`;
+            document.getElementById('barra-progreso').style.width = `${pct}%`;
+          });
+        }
+      });
+    })();
+  </script>
+</body>
+</html>
